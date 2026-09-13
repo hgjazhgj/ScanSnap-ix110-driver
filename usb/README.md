@@ -1,5 +1,7 @@
 # ScanSnap iX100/iX110 USB 扫描
 
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+
 独立 Python 驱动，通过 USB 保存单面彩色、灰度或黑白 BMP。支持单页扫描和放纸自动扫描的连续作业，不加载官方用户态 DLL。
 
 以下命令均从 `ix100/usb/` 执行。需要 Python 3.11 或更新版本。

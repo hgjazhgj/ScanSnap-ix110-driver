@@ -1,5 +1,7 @@
 # Python 函数与 CLI 参考
 
+[简体中文](FUNCTIONS.md) | [English](FUNCTIONS.en.md) | [日本語](FUNCTIONS.ja.md)
+
 更新：2026-09-13。本页列出当前 Python API 与对应 CLI。已在 iX110 上完成 USB 信息读取，设置写入尚未真机验证。安装与常用操作见 [使用说明](../README.md)。
 
 从 `ix100/wifi-setup/` 目录运行：

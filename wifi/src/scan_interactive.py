@@ -76,17 +76,17 @@ def main(argv: list[str] | None = None) -> int:
     with DriverSession(config) as driver:
         driver.reserve()
         with driver.batch() as batch:
-            print(f"连续扫描已开始，放入纸张即可自动扫描。BMP 输出目录：{output_directory}")
-            print("按回车结束（当前页会读完并保存）；Ctrl-C 中止。", flush=True)
+            print(f"Continuous scanning started. Insert paper to scan automatically. BMP output directory: {output_directory}")
+            print("Press Enter to finish after the current page is read and saved; Ctrl-C to abort.", flush=True)
             while True:
-                print("等待放入纸张……", flush=True)
+                print("Waiting for paper...", flush=True)
                 if not batch.wait_for_paper(end_requested):
                     break
                 result = batch.scan_page()
                 save_scan_image(_output_path(output_directory, pages + 1), result)
                 pages += 1
-            print("正在结束扫描批次并释放设备资源……", flush=True)
-    print(f"会话结束，共保存 {pages} 页。")
+            print("Ending the scan batch and releasing device resources...", flush=True)
+    print(f"Session ended. Saved {pages} page(s).")
     return 0
 
 

@@ -1,5 +1,7 @@
 # 运行与分发
 
+[简体中文](RUNNING.md) | [English](RUNNING.en.md) | [日本語](RUNNING.ja.md)
+
 使用 Python 3.11 或更新版本，支持 Windows/Linux。唯一第三方依赖是用于枚举网卡、MAC 和广播地址的 `psutil`；BMP 编码使用标准库。
 
 以下命令均在 `ix100/wifi/` 执行：

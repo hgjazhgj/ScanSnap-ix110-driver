@@ -1,5 +1,7 @@
 # Windows 驱动配置
 
+[简体中文](WINDOWS.md) | [English](WINDOWS.en.md) | [日本語](WINDOWS.ja.md)
+
 本说明适用于 USB 扫描和同包的 [Wi-Fi setup](../../wifi-setup/README.md)。Wi-Fi setup 通过 USB 配置无线网络，因此也需要正确的 USB 驱动绑定；纯 Wi-Fi 扫描不需要这些 USB 驱动。
 
 ## 选择驱动
@@ -91,4 +93,4 @@ Wi-Fi setup 使用自己的依赖与入口。其 `usbscan` 后端只需要 Pytho
 | 提示设备被占用或访问被拒绝                          | 先结束另一扫描/设置作业并退出官方软件；管理员权限不能解除其他程序的独占占用 |
 | WinUSB 安装后官方软件无法通过 USB 扫描              | 按上节恢复官方驱动                                                          |
 
-当前 USB 真机验证范围见 [支持说明](../doc/SUPPORT.md)。驱动安装成功或帮助命令成功不代表所有扫描模式已完成验证。
+驱动安装成功或帮助命令成功不代表所有扫描模式已完成验证。

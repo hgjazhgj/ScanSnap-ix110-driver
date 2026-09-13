@@ -25,7 +25,7 @@ class AdvancedMixin:
                              f"supported binary branch: {', '.join(models)}")
         return model
 
-    @operation("设置扫描仪名称、扫描连接密码及密码显示设置", mutates=True)
+    @operation("Set the scanner name, scan connection password and password display setting", mutates=True)
     def set_system_settings(self, name: str, password: str = "",
                             password_display: int = 0) -> dict:
         """Usb_Mobile_Setting / FUN_1001a3b0; empty password disables PwdMode."""
@@ -39,11 +39,11 @@ class AdvancedMixin:
         return {"name": name, "password_required": bool(password),
                 "password_display": password_display}
 
-    @operation("读取 EH/ReadyNotificationPort 通知端口")
+    @operation("Read the EH/ReadyNotificationPort notification port")
     def get_eh_port(self) -> dict:
         return {"eh_port": self.get_system_settings()["eh_port"]}
 
-    @operation("设置 EH/ReadyNotificationPort 通知端口", mutates=True)
+    @operation("Set the EH/ReadyNotificationPort notification port", mutates=True)
     def set_eh_port(self, port: int) -> dict:
         """Usb_EHInfo_Setting; this does not change 53218/53219/52217."""
         data = bytearray(0x204)
@@ -51,7 +51,7 @@ class AdvancedMixin:
         self.exchange(0x100A, bytes(data))
         return {"eh_port": port}
 
-    @operation("读取已关联电脑的两组主机 ID")
+    @operation("Read the two sets of registered PC host IDs")
     def get_registered_pcs(self) -> dict:
         """FUN_10014c10: read four bytes; first two hold the big-endian length."""
         length_data = self.diagnostic(b"GET HOSTID LEN  ", 4)
@@ -68,7 +68,7 @@ class AdvancedMixin:
                    for i in range(count)]
         return {"count": count, "computers": records}
 
-    @operation("注册电脑主机 ID（十六进制字符串）", mutates=True)
+    @operation("Register PC host IDs as hexadecimal strings", mutates=True)
     def register_pc(self, host_id: str, additional_host_id: str = "") -> dict:
         """Usb_WifiConnectPC_Register; each ID is eight bytes on the wire."""
         first = bytes.fromhex(host_id).ljust(8, b"\0")
@@ -81,7 +81,7 @@ class AdvancedMixin:
                              f"official result 0x{official_result:02X}")
         return {"registered": True}
 
-    @operation("初始化电脑关联数据（CLR HOSTID ADATA）", mutates=True)
+    @operation("Initialize PC registration data (CLR HOSTID ADATA)", mutates=True)
     def initialize_registered_pcs(self) -> dict:
         """Official API is initialization; the exact slot scope is not inferred."""
         result = self.diagnostic(b"CLR HOSTID ADATA", 2)
@@ -92,7 +92,7 @@ class AdvancedMixin:
                              f"official result 0x{official_result:02X}")
         return {"initialized": True}
 
-    @operation("写入官方 Possession_Setting（SET OCCUPA RIGHT）", mutates=True)
+    @operation("Write official Possession_Setting (SET OCCUPA RIGHT)", mutates=True)
     def set_possession_setting(self, value: int) -> dict:
         """Usb_Possession_Setting: nonzero selects 0x80; second byte remains zero."""
         payload = bytes((0x80 if value else 0, 0))
@@ -104,13 +104,13 @@ class AdvancedMixin:
                              f"official result 0x{official_result:02X}")
         return {"possession_setting": value, "official_result": 0}
 
-    @operation("写入官方 Reset_invalidation 的原始整数参数", mutates=True)
+    @operation("Write the raw integer argument for official Reset_invalidation", mutates=True)
     def reset_invalidation(self, value: int) -> dict:
         """Usb_Reset_invalidation; do not infer erase-profile or factory-reset semantics."""
         self.exchange(0x1015, struct.pack("<I", value))
         return {"reset_invalidation": value, "completed": True}
 
-    @operation("上传证书文件到设备暂存区", mutates=True)
+    @operation("Upload a certificate file to device temporary storage", mutates=True)
     def upload_certificate(self, data: bytes, file_id: str = "CertificateFile") -> dict:
         """FUN_10011150: 4000-byte chunks in fixed 0xFF0-byte payloads."""
         for offset in range(0, len(data), 4000):
@@ -124,7 +124,7 @@ class AdvancedMixin:
             self.exchange(0x100B, bytes(payload))
         return {"file_id": file_id, "bytes_uploaded": len(data)}
 
-    @operation("注册已上传的证书及其导入密码", mutates=True)
+    @operation("Register an uploaded certificate and its import password", mutates=True)
     def register_certificate(self, kind: int, filename: str,
                              password: str = "") -> dict:
         """Usb_CertificateFile_Register / FUN_1001a290."""
@@ -136,7 +136,7 @@ class AdvancedMixin:
         self.exchange(0x100C, bytes(payload))
         return {"kind": kind, "filename": filename, "registered": True}
 
-    @operation("读取证书列表")
+    @operation("Read the certificate list")
     def list_certificates(self, kind: int) -> dict:
         """Usb_Certificate_List; 16-byte prefix, up to ten 0x158-byte records."""
         payload = bytearray(0x10)
@@ -157,7 +157,7 @@ class AdvancedMixin:
             })
         return {"kind": kind, "count": count, "certificates": entries}
 
-    @operation("读取证书详细信息")
+    @operation("Read certificate details")
     def get_certificate_info(self, kind: int, get_info: int,
                              filename: str = "") -> dict:
         """Usb_Certification_Info / FUN_1001dae0. get_info is the official selector."""
@@ -176,7 +176,7 @@ class AdvancedMixin:
             result[field] = get_text(data, offset, size, self.encoding)
         return result
 
-    @operation("删除指定证书", mutates=True)
+    @operation("Delete the specified certificate", mutates=True)
     def delete_certificate(self, kind: int, filename: str = "") -> dict:
         payload = bytearray(0x66)
         struct.pack_into("<H", payload, 0, kind)
@@ -184,14 +184,14 @@ class AdvancedMixin:
         self.exchange(0x100E, bytes(payload))
         return {"kind": kind, "filename": filename, "deleted": True}
 
-    @operation("读取 DNS 参数（官方仅 iX1300/iX1500/iX1600 二进制分支）")
+    @operation("Read DNS settings (official binary branch for iX1300/iX1500/iX1600 only)")
     def get_dns(self) -> dict:
         self._require_advanced_model(("iX1300", "iX1500", "iX1600"), "DNS")
         data = self.exchange(0x10F, read_size=0x24, request_size=0x24)
         return {"mode": u32(data), "primary": get_text(data, 4, 16, self.encoding),
                 "secondary": get_text(data, 20, 16, self.encoding)}
 
-    @operation("设置 DNS 参数（官方仅 iX1300/iX1500/iX1600 二进制分支）", mutates=True)
+    @operation("Set DNS settings (official binary branch for iX1300/iX1500/iX1600 only)", mutates=True)
     def set_dns(self, mode: int, primary: str = "", secondary: str = "") -> dict:
         self._require_advanced_model(("iX1300", "iX1500", "iX1600"), "DNS")
         payload = bytearray(0x24)
@@ -201,7 +201,7 @@ class AdvancedMixin:
         self.exchange(0x110F, bytes(payload))
         return {"mode": mode, "primary": primary, "secondary": secondary}
 
-    @operation("读取代理服务器（官方仅 iX1300/iX1500/iX1600 二进制分支）")
+    @operation("Read proxy settings (official binary branch for iX1300/iX1500/iX1600 only)")
     def get_proxy(self) -> dict:
         self._require_advanced_model(("iX1300", "iX1500", "iX1600"), "proxy")
         data = self.exchange(0x0D, read_size=0x514, request_size=0x514)
@@ -215,7 +215,7 @@ class AdvancedMixin:
                 "username": get_text(data, 0x10C, 0x101, self.encoding) if auth else "",
                 "password": decode_secret(data[0x210:0x510], True, self.encoding) if auth else ""}
 
-    @operation("设置代理服务器（官方仅 iX1300/iX1500/iX1600 二进制分支）", mutates=True)
+    @operation("Set proxy settings (official binary branch for iX1300/iX1500/iX1600 only)", mutates=True)
     def set_proxy(self, enabled: bool, address: str = "", port: int = 8080,
                   authentication: bool = False, username: str = "",
                   password: str = "") -> dict:
@@ -233,40 +233,40 @@ class AdvancedMixin:
         self.exchange(0x101C, bytes(payload))
         return {"enabled": enabled, "configured": True}
 
-    @operation("读取连接频段枚举（官方仅 iX1300）")
+    @operation("Read the connection frequency-band enumeration (officially iX1300 only)")
     def get_connect_frequency(self) -> dict:
         self._require_advanced_model(("iX1300",), "connection frequency")
         return {"frequency": u32(self.exchange(0x110, read_size=4, request_size=0))}
 
-    @operation("设置连接频段枚举（官方仅 iX1300）", mutates=True)
+    @operation("Set the connection frequency-band enumeration (officially iX1300 only)", mutates=True)
     def set_connect_frequency(self, frequency: int) -> dict:
         self._require_advanced_model(("iX1300",), "connection frequency")
         self.exchange(0x1110, struct.pack("<I", frequency))
         return {"frequency": frequency}
 
-    @operation("读取漫游枚举（官方仅 iX1300）")
+    @operation("Read the roaming enumeration (officially iX1300 only)")
     def get_roaming(self) -> dict:
         self._require_advanced_model(("iX1300",), "roaming")
         return {"roaming": u32(self.exchange(0x111, read_size=4, request_size=0))}
 
-    @operation("设置漫游枚举（官方仅 iX1300）", mutates=True)
+    @operation("Set the roaming enumeration (officially iX1300 only)", mutates=True)
     def set_roaming(self, roaming: int) -> dict:
         self._require_advanced_model(("iX1300",), "roaming")
         self.exchange(0x1111, struct.pack("<I", roaming))
         return {"roaming": roaming}
 
-    @operation("读取通信协议枚举（不是端口号）")
+    @operation("Read the communication protocol enumeration, not a port number")
     def get_protocol(self) -> dict:
         return {"protocol": u32(self.exchange(0x113, read_size=16, request_size=16))}
 
-    @operation("设置通信协议枚举（官方值 0/1，不是端口号）", mutates=True)
+    @operation("Set the communication protocol enumeration (official values 0/1, not port numbers)", mutates=True)
     def set_protocol(self, protocol: int) -> dict:
         payload = bytearray(16)
         payload[0] = protocol
         self.exchange(0x1117, bytes(payload))
         return {"protocol": protocol}
 
-    @operation("读取设备认证需求及官方状态码")
+    @operation("Read device authentication requirements and official status codes")
     def get_device_auth_requirement(self) -> dict:
         """Usb_Is_Red_Device / 100142E0; bit, firmware gate and result remain distinct."""
         data = self.scsi(bytes.fromhex("12 01 F0 00 83 00"), data_in_size=0x83)
@@ -283,7 +283,7 @@ class AdvancedMixin:
         return {"capability_bit": True, "official_state": state,
                 "firmware_gate": firmware[:4].decode("ascii")}
 
-    @operation("读取设备认证 key（旧型号 Usb_Operate_Auth_Device 的查询分支）")
+    @operation("Read the device authentication key (query branch of Usb_Operate_Auth_Device for older models)")
     def get_device_auth(self) -> dict:
         """Return the opaque 64-byte key; official frontend stores it as Base64.
 
@@ -296,23 +296,23 @@ class AdvancedMixin:
         return {"authentication_key": key, "authentication_key_size": len(key),
                 "authentication_key_base64": base64.b64encode(key).decode("ascii")}
 
-    @operation("读取维护模式")
+    @operation("Read maintenance mode")
     def get_maintenance_mode(self) -> dict:
         return {"mode": u32(self.exchange(0xF002, read_size=4, request_size=0))}
 
-    @operation("设置维护模式（官方 token 清除使用进入 1、退出 0）", mutates=True)
+    @operation("Set maintenance mode (official token erasure enters with 1 and exits with 0)", mutates=True)
     def set_maintenance_mode(self, mode: int) -> dict:
         self.exchange(0xF001, struct.pack("<I", mode))
         return {"mode": mode}
 
-    @operation("通过官方维护接口执行设备命令", mutates=True)
+    @operation("Execute a device command through the official maintenance interface", mutates=True)
     def execute_device_command(self, command: str) -> dict:
         data = self.exchange(0xF003, command.encode(self.encoding), read_size=0xFF0)
         require_size(data, 4, "device command response")
         return {"exit_status": u32(data),
                 "secret_output": get_text(data, 4, len(data) - 4, self.encoding)}
 
-    @operation("通过官方分页接口读取设备文件")
+    @operation("Read a device file through the official paginated interface")
     def get_device_file(self, path: str) -> dict:
         """FUN_10013c10; response +12 is the next cursor and +16 is data size."""
         cursor = 0
@@ -333,7 +333,7 @@ class AdvancedMixin:
                 raise SetupError("device file transfer timed out before final chunk")
         raise SetupError("device file transfer exceeded the official 3000-chunk budget")
 
-    @operation("清除设备访问 token（进入维护模式并执行官方命令）", mutates=True)
+    @operation("Erase the device access token by entering maintenance mode and issuing the official command", mutates=True)
     def erase_access_token(self) -> dict:
         self.set_maintenance_mode(1)
         try:
@@ -344,7 +344,7 @@ class AdvancedMixin:
         finally:
             self.set_maintenance_mode(0)
 
-    @operation("重置无线设置并复现官方 iX110 名称/SSID 恢复分支", mutates=True)
+    @operation("Reset wireless settings and reproduce the official iX110 name/SSID restoration branch", mutates=True)
     def reset_wifi_settings(self) -> dict:
         """FUN_10012e00: reset, then iX100-family serial-based iX110 handling."""
         model = self._advanced_model()

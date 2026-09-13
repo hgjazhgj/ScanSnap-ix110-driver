@@ -1,5 +1,7 @@
 # Wi-Fi 配置
 
+[简体中文](CONFIGURATION.md) | [English](CONFIGURATION.en.md) | [日本語](CONFIGURATION.ja.md)
+
 以下路径和命令均以 `ix100/wifi/` 为当前目录。复制 `config/ix100.example.ini` 为 `config/ix100.local.ini` 后，按下表使用固定的节名和键名。必填项只有扫描仪 IP、Manager ID，以及启用连接密码时的密码；其余项使用默认值。
 
 ```powershell

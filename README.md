@@ -1,5 +1,7 @@
 # ScanSnap iX100 / iX110 的通用第三方驱动程序
 
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+
 我购买了一个便携式扫描仪，这可能是当前市面上唯一的使用type-c接口的便携式扫描仪  
 但是买来后我就发现他的官方驱动一坨狗屎，不光十分臃肿，把各个型号的硬件驱动与后续软件图像处理耦合在一起（可能对于高中肄业就上班的日本牛马来说易于使用而广受好评吧），而且最关键的硬件驱动甚至只能输出 JPG 和 PDF 这两种有损压缩格式，这是我不能接受的  
 事实上，硬件本身具有输出未压缩图像的能力
@@ -29,3 +31,20 @@ python -B wifi-setup/src/setup_cli.py --help
 ```
 
 仓库中的剩余部分几乎全部由 AI 生成，有少量删改
+
+## 全部文档 / All documentation / 全ドキュメント
+
+| 文档 | 简体中文 | English | 日本語 |
+| --- | --- | --- | --- |
+| 项目总览 | [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) |
+| USB 扫描 | [简体中文](usb/README.md) | [English](usb/README.en.md) | [日本語](usb/README.ja.md) |
+| USB Python API | [简体中文](usb/doc/PYTHON_API.md) | [English](usb/doc/PYTHON_API.en.md) | [日本語](usb/doc/PYTHON_API.ja.md) |
+| 驱动与设备权限 | [简体中文](usb/driver/README.md) | [English](usb/driver/README.en.md) | [日本語](usb/driver/README.ja.md) |
+| Windows 驱动配置 | [简体中文](usb/driver/WINDOWS.md) | [English](usb/driver/WINDOWS.en.md) | [日本語](usb/driver/WINDOWS.ja.md) |
+| Wi-Fi 扫描 | [简体中文](wifi/README.md) | [English](wifi/README.en.md) | [日本語](wifi/README.ja.md) |
+| Wi-Fi 配置 | [简体中文](wifi/doc/CONFIGURATION.md) | [English](wifi/doc/CONFIGURATION.en.md) | [日本語](wifi/doc/CONFIGURATION.ja.md) |
+| Wi-Fi 运行与分发 | [简体中文](wifi/doc/RUNNING.md) | [English](wifi/doc/RUNNING.en.md) | [日本語](wifi/doc/RUNNING.ja.md) |
+| Wi-Fi 连续扫描 | [简体中文](wifi/doc/INTERACTIVE.md) | [English](wifi/doc/INTERACTIVE.en.md) | [日本語](wifi/doc/INTERACTIVE.ja.md) |
+| Wi-Fi Python API | [简体中文](wifi/doc/API.md) | [English](wifi/doc/API.en.md) | [日本語](wifi/doc/API.ja.md) |
+| Wi-Fi 设置 | [简体中文](wifi-setup/README.md) | [English](wifi-setup/README.en.md) | [日本語](wifi-setup/README.ja.md) |
+| 设置函数与 CLI 参考 | [简体中文](wifi-setup/doc/FUNCTIONS.md) | [English](wifi-setup/doc/FUNCTIONS.en.md) | [日本語](wifi-setup/doc/FUNCTIONS.ja.md) |

@@ -1,5 +1,7 @@
 # 驱动与设备权限
 
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+
 扫描操作见[使用说明](../README.md)。USB 扫描和同包的 Wi-Fi setup 共用这些驱动准备条件。
 
 ## Windows

@@ -38,7 +38,7 @@ class WifiMixin:
         return decode_secret(data[offset:offset + 192], legacy=self.legacy_key,
                              encoding=self.encoding)
 
-    @operation("设置路由器 SSID、认证方式、加密方式和 Wi-Fi 密钥", mutates=True)
+    @operation("Set router SSID, authentication, encryption and Wi-Fi key", mutates=True)
     def set_wifi(self, ssid: str, security: str, encryption: str, wifi_key: str) -> None:
         """Usb_Wifi_Setting / FUN_10019f30; e.g. security=WPA2, encryption=AES."""
         data = bytearray(0xF8)
@@ -48,7 +48,7 @@ class WifiMixin:
         data[0x34:0xF4] = self._wifi_secret(wifi_key)
         self.exchange(0x1006, data)
 
-    @operation("设置 STA 的 802.1X / EAP 身份、证书检查和无线密钥", mutates=True)
+    @operation("Set STA 802.1X / EAP identity, certificate checking and wireless key", mutates=True)
     def set_wifi_8021x(self, ssid: str, security: str, encryption: str,
                       eap_type: str = "", phase2: str = "", user_id: str = "",
                       eap_password: str = "", anonymous_identity: str = "",
@@ -66,7 +66,7 @@ class WifiMixin:
         data[0x1AE:0x26E] = self._wifi_secret(wifi_key)
         self.exchange(0x100D, data)
 
-    @operation("设置 STA 的 DHCP 或静态 IPv4、掩码、网关", mutates=True)
+    @operation("Set STA DHCP or static IPv4, netmask and gateway", mutates=True)
     def set_ip(self, dhcp: int, ip: str = "", netmask: str = "", gateway: str = "") -> None:
         """Usb_Ip_Setting: 0x8c-byte payload with textual IPv4 fields."""
         data = bytearray(0x8C)
@@ -75,29 +75,29 @@ class WifiMixin:
             put_text(data, offset, 16, value)
         self.exchange(0x1003, data)
 
-    @operation("执行已配置 STA 无线连接诊断", mutates=True)
+    @operation("Diagnose the configured STA wireless connection", mutates=True)
     def diagnose_wifi(self) -> None:
         """Usb_Wifi_Diagnostic; completion checks the command result."""
         self.exchange(0x1009)
 
-    @operation("读取开机 Wi-Fi 模式")
+    @operation("Read the startup Wi-Fi mode")
     def get_startup_wifi_mode(self) -> int:
         return u32(self.exchange(0x103, read_size=4, request_size=0))
 
-    @operation("设置开机 Wi-Fi 模式（iX100 分支）", mutates=True)
+    @operation("Set the startup Wi-Fi mode (iX100 branch)", mutates=True)
     def set_startup_wifi_mode(self, mode: int) -> None:
         """FUN_100155c0: iX100 command 0x1106; other models use other commands."""
         self.exchange(0x1106, struct.pack("<I", mode))
 
-    @operation("读取当前 Wi-Fi 模式")
+    @operation("Read the current Wi-Fi mode")
     def get_wifi_mode(self) -> int:
         return u32(self.exchange(0x104, read_size=4, request_size=0))
 
-    @operation("立即切换 Wi-Fi 模式（iX100 分支）", mutates=True)
+    @operation("Switch Wi-Fi mode immediately (iX100 branch)", mutates=True)
     def set_wifi_mode(self, mode: int) -> None:
         self.exchange(0x1107, struct.pack("<I", mode))
 
-    @operation("读取直连 AP 的 SSID、安全设置、IP 和 DHCP 服务设置")
+    @operation("Read direct-connect AP SSID, security, IP and DHCP server settings")
     def get_ap_settings(self) -> dict:
         """Usb_Ap_Setting_Info / FUN_1001e7d0, including device key decoding."""
         data = self.exchange(0x102, read_size=0x2C8, request_size=0x2C8)
@@ -116,7 +116,7 @@ class WifiMixin:
         result["wifi_key"] = self._read_wifi_secret(data, 0x2D)
         return result
 
-    @operation("读取直连 AP 当前状态、MAC、扫描仪名称和连接设置")
+    @operation("Read direct-connect AP status, MAC, scanner name and connection settings")
     def get_ap_system_info(self) -> dict:
         """Usb_Ap_System_Info / FUN_1001e090; system tail comes from config file."""
         system = self.get_system_settings()
@@ -138,7 +138,7 @@ class WifiMixin:
         result.update(system)
         return result
 
-    @operation("设置直连 AP 的 SSID、隐藏模式、信道及安全参数", mutates=True)
+    @operation("Set direct-connect AP SSID, stealth mode, channel and security parameters", mutates=True)
     def set_ap_wifi(self, ssid: str, stealth: int, channel: int, security: str,
                     encryption: str, wifi_key: str, key_display: int = 0) -> None:
         """Usb_Ap_Wifi_Setting / FUN_10015470 / FUN_1001a4f0."""
@@ -151,7 +151,7 @@ class WifiMixin:
             put_u32(data, offset, value)
         self.exchange(0x1101, data)
 
-    @operation("设置直连 AP 的 IPv4、掩码、DHCP 服务和地址租期/地址池", mutates=True)
+    @operation("Set direct-connect AP IPv4, netmask, DHCP server, lease time and address pool", mutates=True)
     def set_ap_ip(self, ip: str, netmask: str, dhcp_server: int, lease_time: int,
                   lease_start: str, lease_end: str) -> None:
         """Usb_Ap_Ip_Setting: lease_time uses the official raw LeaseIPTerm unit."""
@@ -181,14 +181,14 @@ class WifiMixin:
         result["index"] = index
         return result
 
-    @operation("读取全部保存的 Wi-Fi 档案及各自 IP 设置")
+    @operation("Read all saved Wi-Fi profiles and their IP settings")
     def get_profiles(self) -> list:
         """Usb_Profile_Info / FUN_1001eec0; returned index is zero-based."""
         data = self._get_profiles_payload()
         return [self._profile_decode(data[16 + i * PROFILE_SIZE:16 + (i + 1) * PROFILE_SIZE], i)
                 for i in range(u32(data))]
 
-    @operation("注册指定编号的 Wi-Fi / 802.1X 档案", mutates=True)
+    @operation("Register a Wi-Fi / 802.1X profile at the specified number", mutates=True)
     def register_profile(self, profile_no: int, ssid: str, security: str,
                          encryption: str, eap_type: str = "", phase2: str = "",
                          user_id: str = "", eap_password: str = "",
@@ -221,7 +221,7 @@ class WifiMixin:
                 offset = record_start + PROFILE_SECRET_FIELDS[name]
                 data[offset:offset + 192] = encode_secret(value, legacy=False, encoding=self.encoding)
 
-    @operation("按零基 index 修改已有档案，保留未指定档案和未知字段", mutates=True)
+    @operation("Update existing profiles by zero-based index, preserving unspecified profiles and unknown fields", mutates=True)
     def set_profiles(self, profiles: list) -> None:
         """Each dict supplies index and changed fields; no implicit removal or append."""
         data = bytearray(self._get_profiles_payload())
@@ -232,7 +232,7 @@ class WifiMixin:
             self._profile_patch(data, record_start, changes)
         self.exchange(0x1012, data)
 
-    @operation("显式替换档案列表：按 index 保留/重排，省略的档案移出有效列表", mutates=True)
+    @operation("Explicitly replace the profile list: retain/reorder by index and remove omitted profiles from the active list", mutates=True)
     def replace_profiles(self, profiles: list) -> None:
         """Desired full list; index copies an existing record, no index creates a new one.
 
@@ -251,16 +251,16 @@ class WifiMixin:
             self._profile_patch(data, start, changes)
         self.exchange(0x1012, data)
 
-    @operation("修改单个已有档案的 DHCP/IP 参数，保留其他档案及密钥", mutates=True)
+    @operation("Update DHCP/IP settings of one existing profile, preserving other profiles and keys", mutates=True)
     def set_profile_ip(self, index: int, dhcp: int, ip: str = "",
                        netmask: str = "", gateway: str = "") -> None:
         self.set_profiles([dict(index=index, dhcp=dhcp, ip=ip, netmask=netmask, gateway=gateway)])
 
-    @operation("应用已经保存的 Wi-Fi 档案", mutates=True)
+    @operation("Apply the saved Wi-Fi profiles", mutates=True)
     def apply_profiles(self) -> None:
         self.exchange(0x1013)
 
-    @operation("诊断指定编号的 Wi-Fi 档案连接", mutates=True)
+    @operation("Diagnose the Wi-Fi connection for the specified profile number", mutates=True)
     def diagnose_profile(self, profile_no: int) -> None:
         self.exchange(0x1014, struct.pack("<I", profile_no))
 
@@ -269,7 +269,7 @@ class WifiMixin:
         if wait:
             self.receive_setup(command)
 
-    @operation("启动 STA WPS 按钮/PIN 配对，默认在同一会话等候结果", mutates=True)
+    @operation("Start STA WPS push-button/PIN pairing and wait in the same session by default", mutates=True)
     def start_wps(self, pin: str = "", wait: bool = True) -> None:
         """Empty pin selects push-button mode; USB ownership must persist until done."""
         if pin:
@@ -279,11 +279,11 @@ class WifiMixin:
         else:
             self._wps_start(0x1004, b"", wait)
 
-    @operation("接收当前 USB 会话内已启动的 STA WPS 结果")
+    @operation("Receive the started STA WPS result in the current USB session")
     def get_wps_result(self, pin_mode: bool = False, wait: bool = True) -> None:
         self.receive_setup(0x1005 if pin_mode else 0x1004, wait=wait)
 
-    @operation("取消 WPS 配对并默认在同一会话等候结果", mutates=True)
+    @operation("Cancel WPS pairing and wait for the result in the same session by default", mutates=True)
     def cancel_wps(self, wait: bool = True) -> None:
         # Usb_Wps_Send(mode=2) replaces the pending WPS transaction. It must
         # not wait for pairing to finish before sending its cancellation.
@@ -292,11 +292,11 @@ class WifiMixin:
             self._pending = None
         self._wps_start(0x1007, b"", wait)
 
-    @operation("接收当前 USB 会话内 WPS 取消操作的结果")
+    @operation("Receive the WPS cancellation result in the current USB session")
     def get_wps_cancel_result(self, wait: bool = True) -> None:
         self.receive_setup(0x1007, wait=wait)
 
-    @operation("启动直连 AP WPS 按钮/PIN 配对，默认等候结果", mutates=True)
+    @operation("Start direct-connect AP WPS push-button/PIN pairing and wait by default", mutates=True)
     def start_ap_wps(self, pin: str = "", wait: bool = True) -> None:
         if pin:
             data = bytearray(8)
@@ -305,24 +305,24 @@ class WifiMixin:
         else:
             self._wps_start(0x1103, b"", wait)
 
-    @operation("接收当前 USB 会话内直连 AP WPS 结果")
+    @operation("Receive the direct-connect AP WPS result in the current USB session")
     def get_ap_wps_result(self, pin_mode: bool = False, wait: bool = True) -> None:
         self.receive_setup(0x1104 if pin_mode else 0x1103, wait=wait)
 
-    @operation("设置直连 AP WPS 状态", mutates=True)
+    @operation("Set the direct-connect AP WPS status", mutates=True)
     def set_ap_wps_status(self, status: int) -> None:
         self.exchange(0x1105, struct.pack("<I", status))
 
-    @operation("启动官方 AP WPS mode 3 操作，默认等候结果", mutates=True)
+    @operation("Start the official AP WPS mode 3 operation and wait by default", mutates=True)
     def start_ap_wps_mode3(self, wait: bool = True) -> None:
         """Usb_Ap_Wps_Send mode 3: command 0x101a + zero dword; keep raw naming."""
         self._wps_start(0x101A, bytes(4), wait)
 
-    @operation("接收当前 USB 会话内 AP WPS mode 3 的结果")
+    @operation("Receive the AP WPS mode 3 result in the current USB session")
     def get_ap_wps_mode3_result(self, wait: bool = True) -> None:
         self.receive_setup(0x101A, wait=wait)
 
-    @operation("通过 WPS 按钮/PIN 注册档案，默认等候结果", mutates=True)
+    @operation("Register a profile using WPS push-button/PIN pairing and wait by default", mutates=True)
     def start_profile_wps(self, pin: str = "", wait: bool = True) -> None:
         if pin:
             data = bytearray(8)
@@ -331,6 +331,6 @@ class WifiMixin:
         else:
             self._wps_start(0x1010, b"", wait)
 
-    @operation("接收当前 USB 会话内档案 WPS 的结果")
+    @operation("Receive the profile WPS result in the current USB session")
     def get_profile_wps_result(self, pin_mode: bool = False, wait: bool = True) -> None:
         self.receive_setup(0x1011 if pin_mode else 0x1010, wait=wait)

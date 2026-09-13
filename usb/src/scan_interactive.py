@@ -63,11 +63,11 @@ def interactive_loop(
     output_dir = output_dir.expanduser().resolve()
     pages = 0
     with open_scan_batch(backend, settings, reporter=report) as batch:
-        print("连续扫描已开始，放入纸张即可自动扫描。")
-        print("按回车结束（当前页会读完并保存）；Ctrl-C 中止。", flush=True)
+        print("Continuous scanning started. Insert paper to scan automatically.")
+        print("Press Enter to finish after the current page is read and saved; Ctrl-C to abort.", flush=True)
         try:
             while True:
-                print("等待放入纸张……", flush=True)
+                print("Waiting for paper...", flush=True)
                 if not batch.wait_for_paper(end_requested):
                     break
                 page = batch.scan_page()
@@ -76,13 +76,13 @@ def interactive_loop(
                 save_bmp(output, page)
                 pages += 1
                 print(
-                    f"已保存：{output} ({page.width} x {page.height}, "
+                    f"Saved: {output} ({page.width} x {page.height}, "
                     f"{output.stat().st_size} bytes)"
                 )
         except (KeyboardInterrupt, EOFError):
-            print("\n收到中止请求。")
-        print("正在结束扫描批次并释放设备资源……", flush=True)
-    print(f"会话结束，共保存 {pages} 页。")
+            print("\nAbort requested.")
+        print("Ending the scan batch and releasing device resources...", flush=True)
+    print(f"Session ended. Saved {pages} page(s).")
     return 0
 
 

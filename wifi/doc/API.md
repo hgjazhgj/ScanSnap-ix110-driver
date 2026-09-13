@@ -1,5 +1,7 @@
 # Python 调用
 
+[简体中文](API.md) | [English](API.en.md) | [日本語](API.ja.md)
+
 使用 Python 3.11 或更新版本，并从 `ix100/wifi/` 执行 `python -m pip install -r requirements.txt` 安装依赖。将 `src/` 加入模块搜索路径，或在 `src/` 中启动 Python。
 
 | 模块 | 职责 |

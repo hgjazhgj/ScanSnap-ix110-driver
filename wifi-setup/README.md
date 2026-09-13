@@ -1,5 +1,7 @@
 # iX100 / iX110 Wi-Fi 设置
 
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+
 通过 USB 读取和配置扫描仪无线网络，提供 86 个 Python 设备函数及对应 CLI。支持 STA/AP、无线档案、WPS、IP、扫描连接密码、EH 通知端口、电脑关联和证书等操作。完整参数见 [函数与 CLI 参考](doc/FUNCTIONS.md)。
 
 运行时不加载官方用户态 DLL。已在 iX110 上完成 USB 信息读取，覆盖 MAC、网络配置、档案、AP 和证书列表；**配置写入尚未真机验证**，不同型号和固件可能不支持部分功能。

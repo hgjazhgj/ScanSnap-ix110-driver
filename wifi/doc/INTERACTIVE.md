@@ -1,5 +1,7 @@
 # 连续扫描
 
+[简体中文](INTERACTIVE.md) | [English](INTERACTIVE.en.md) | [日本語](INTERACTIVE.ja.md)
+
 在 `ix100/wifi/` 中执行：
 
 ```powershell

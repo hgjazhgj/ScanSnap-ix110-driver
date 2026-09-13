@@ -1,5 +1,7 @@
 # ScanSnap iX100/iX110 Wi-Fi 驱动
 
+[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+
 独立 Python 驱动，支持 Windows/Linux，不需要 ScanSnap Home 或官方 DLL。通过 Wi-Fi 发现、预约和控制扫描仪，请求单面未压缩彩色、灰度或黑白图像，分别保存为 24、8 或 1 位 BMP。
 
 使用 Python 3.11 或更新版本。以下命令均从本目录 `ix100/wifi/` 运行：

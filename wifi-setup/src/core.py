@@ -103,7 +103,7 @@ class SetupSession:
         self.send_diagnostic(data)
         return self.receive_diagnostic(read_size)
 
-    @operation("占有 USB 无线设置会话（CLI 会在结束时释放）", mutates=True)
+    @operation("Acquire the USB wireless setup session (the CLI releases it on exit)", mutates=True)
     def acquire_setup(self) -> dict:
         if not self._owned:
             response = self.diagnostic(SETUP_START, 1)
@@ -113,7 +113,7 @@ class SetupSession:
             self._owned = True
         return {"setup_session_owned": True}
 
-    @operation("释放当前 USB 无线设置会话", mutates=True)
+    @operation("Release the current USB wireless setup session", mutates=True)
     def release_setup(self) -> dict:
         if self._owned:
             self._owned = False

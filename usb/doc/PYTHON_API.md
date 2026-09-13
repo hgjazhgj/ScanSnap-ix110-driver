@@ -1,6 +1,8 @@
 # Python 接口
 
-[使用文档索引](README.md)
+[简体中文](PYTHON_API.md) | [English](PYTHON_API.en.md) | [日本語](PYTHON_API.ja.md)
+
+[使用文档索引](../README.md)
 
 将 `ix100/usb/src/` 加入 `PYTHONPATH`，或在 `src/` 目录中启动Python后：
 
