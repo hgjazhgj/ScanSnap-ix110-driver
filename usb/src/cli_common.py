@@ -2,8 +2,6 @@
 
 import argparse
 
-from scanner_driver import MODEL_WINDOW_HEIGHT_UNITS
-
 
 def report(message: str) -> None:
     print(message, flush=True)
@@ -14,19 +12,9 @@ def add_scan_options(parser: argparse.ArgumentParser) -> None:
         "--dpi",
         type=int,
         default=300,
-        help="scan resolution (default: 300 DPI)",
-    )
-    parser.add_argument(
-        "--height",
-        dest="height_units",
-        type=int,
-        metavar="UNITS",
-        default=MODEL_WINDOW_HEIGHT_UNITS,
         help=(
-            "height in 1/1200 inch units, used as supplied; "
-            "model reference range: "
-            "1..42307; official 300-DPI color values: normal 17204, long 42307 "
-            "(default); gray/mono normal: 17202; no input range validation"
+            "scan resolution (default: 300 DPI); window height is 17828 units "
+            "at 600 DPI and 42307 otherwise (1/1200 inch units)"
         ),
     )
     parser.add_argument(
@@ -34,8 +22,8 @@ def add_scan_options(parser: argparse.ArgumentParser) -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "select width before alignment: 10368 units when on (default), "
-            "10200 when off; height is unchanged"
+            "send width 10368 units when on (default), 10208 when off "
+            "(1/1200 inch units); height is unchanged"
         ),
     )
     parser.add_argument(

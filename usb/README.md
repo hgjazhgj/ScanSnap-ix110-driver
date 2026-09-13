@@ -35,12 +35,15 @@ python src/scan_interactive.py
 
 按回车结束，当前页会读完并保存；Ctrl-C 中止当前页并结束作业。不要同时运行两个扫描程序。
 
-默认输出到本目录的 `output/`，缺少目录时自动创建。也可指定位置：
+默认输出到本目录的 `output/`，缺少目录时自动创建。单页默认文件名为 `ix100-%Y%m%d-%H%M%S-%f.bmp`，在访问设备前按本机当地时间调用 `strftime` 展开。也可指定位置：
 
 ```powershell
 python src/scan_direct.py output/page.bmp
+python src/scan_direct.py 'output/%Y%m%d/scan-%H%M%S-%f.bmp'
 python src/scan_interactive.py --output-dir output
 ```
+
+`scan_direct.py` 对整个输出路径展开时间格式，包括目录；`%f` 为六位微秒，`%%` 表示字面百分号。自定义相对路径以当前工作目录为基准。交互入口沿用逐页时间戳命名，`--output-dir` 不展开时间格式。
 
 ## 选项
 
@@ -48,13 +51,14 @@ python src/scan_interactive.py --output-dir output
 
 | 选项                           | 用途与默认值                                      |
 | ------------------------------ | ------------------------------------------------- |
-| `--dpi 300`                    | 扫描分辨率，默认 300 DPI, 最高 600                |
+| `--dpi 300`                    | 扫描分辨率，默认 300 DPI                         |
 | `--color-mode color`           | `color` 彩色、`gray` 灰度、`mono` 黑白，默认彩色  |
 | `--backend auto`               | `auto`、`usbscan` 或 `libusb`                     |
-| `--height 42307`               | 高度上限，单位 1/1200 英寸；型号参考范围 1～42307 |
-| `--overscan` / `--no-overscan` | 扩展扫描宽度，默认开启，不改变输入高度            |
+| `--overscan` / `--no-overscan` | 扫描宽度，开启为 10368、关闭为 10208，默认开启   |
 
-DPI 和高度接受整数，设备是否接受指定值以实际响应为准。输出保留设备返回的流宽，不做横向裁边、纠偏、旋转、OCR 或 PDF；图像不完整时会报错。
+DPI 接受整数，设备是否接受指定值以实际响应为准。窗口宽高单位为 1/1200 英寸：600 DPI 的高度固定为 17828，其他 DPI 为 42307；高度由程序选择。两档宽度直接下发。扫描参数在每批作业初始化时配置一次，连续扫描的后续页面沿用同一组参数。
+
+输出保留设备返回的流宽，不做横向裁边、纠偏、旋转、OCR 或 PDF；图像不完整时会报错。保存 BMP 时才按文件格式补齐每行，不改变扫描宽度。图像尺寸使用设备返回的像素宽高；BMP 不指定 DPI，横纵像素/米字段均为 0。
 
 程序被强制终止后，如需结束残留作业：
 
@@ -69,4 +73,4 @@ python -B src/scan_direct.py --help
 python -B src/scan_interactive.py --help
 ```
 
-Python 调用与已验证范围见 [使用文档](doc/README.md)。Wi-Fi 扫描及无线配置入口见 [总说明](../README.md)。
+Wi-Fi 扫描及无线配置入口见 [总说明](../README.md)。

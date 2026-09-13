@@ -10,12 +10,12 @@ from __future__ import annotations
 import datetime as _datetime
 from collections.abc import Callable
 import ipaddress
-import select
 import socket
 import struct
 import threading
 import time
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional
 
 
@@ -29,13 +29,28 @@ class DriverError(RuntimeError):
     """An iX100 network/protocol operation failed."""
 
 
+class ColorMode(str, Enum):
+    COLOR = "color"
+    GRAY = "gray"
+    MONO = "mono"
+
+    @property
+    def bits_per_pixel(self) -> int:
+        return {ColorMode.COLOR: 24, ColorMode.GRAY: 8, ColorMode.MONO: 1}[self]
+
+    @property
+    def composition(self) -> int:
+        return {ColorMode.COLOR: 5, ColorMode.GRAY: 2, ColorMode.MONO: 0}[self]
+
+    @property
+    def data_format(self) -> int:
+        return 0x40 if self is ColorMode.MONO else 0x10
+
+
 @dataclass
 class Config:
     path: str = ""
     scanner_ip: str = ""
-    scanner_name: str = ""
-    scanner_serial: str = ""
-    scanner_mac: str = ""
     control_port: int = 53218
     app_port: int = 53219
     discovery_port: int = 52217
@@ -44,7 +59,9 @@ class Config:
     password: str = ""
     timeout_seconds: int = 30
     dpi: int = 300
-    max_image_mb: int = 100
+    color_mode: ColorMode = ColorMode.COLOR
+    overscan: bool = True
+    max_image_mb: int = 256
     output: str = "output/ix100_scan.bmp"
 
 
@@ -58,10 +75,11 @@ class ImageInfo:
 
 @dataclass(frozen=True)
 class ScanResult:
-    """Uncompressed, top-down BGR pixels with mandatory READ80 dimensions."""
+    """Uncompressed top-down pixels with mandatory READ80 dimensions and mode."""
 
     image: bytes
     info: ImageInfo
+    color_mode: ColorMode = ColorMode.COLOR
 
 
 @dataclass(frozen=True)
@@ -406,6 +424,13 @@ def _require_app_success(frame: bytes, expected_size: int, operation: str) -> No
         )
     status = _get_be32(frame, 8)
     if status != 0:
+        # Android reverse/SSDevCtl.java:1186,1223-1227 maps RESERVE -4 to
+        # errOccupied (Used by other), before any scan parameters are sent.
+        if operation == "RESERVE" and status == 0xFFFFFFFC:
+            raise DriverError(
+                "RESERVE failed: scanner is in use by another client "
+                "(status=-4 / 0xFFFFFFFC); disconnect that client and try again"
+            )
         raise DriverError(f"{operation} failed, status={status}")
 
 
@@ -455,46 +480,74 @@ def _parse_image_info(data: bytes) -> ImageInfo:
     return info
 
 
-def _build_scan_parameters(dpi: int, *, continuous: bool = False) -> _ScanParameters:
-    width_1200 = 0x00002880
-    height_1200 = 0x0000A543
+def _build_scan_parameters(
+    dpi: int,
+    *,
+    color_mode: ColorMode = ColorMode.COLOR,
+    overscan: bool = True,
+    continuous: bool = False,
+) -> _ScanParameters:
+    # Host width selection: Android reverse/SSDevCtl.java:7511,7609 provides
+    # ordinary full-width paper 10208 and automatic paper 10368. Choosing these
+    # by overscan does not reproduce an official automatic-paper combination.
+    width_1200 = 10368 if overscan else 10208
+    # Windows reverse/sshctlnet/selected-extra.c:29-34,87-89,124-125;
+    # selected-memory.txt:2, addresses 101b2474 (17828) and 101b2414 (42307).
+    height_1200 = 17828 if dpi == 600 else 42307
 
     preread = bytearray(32)
     _put_be16(preread, 0, dpi)
     _put_be16(preread, 2, dpi)
     _put_be32(preread, 4, width_1200)
     _put_be32(preread, 8, height_1200)
-    preread[12] = 5
+    preread[12] = color_mode.composition
 
     params = bytearray(80)
     params[0:4] = b"\x00\x01\x01\x01"
+    # Android reverse/SSDevCtl.java:4531-4532,4750-4752.
+    params[2] = int(overscan)
     params[6:13] = b"\x80\x80\x80\xd0\x80\x80\x80"
     # Windows SshCtlNet scan_12190.c:153-158: continuous AsynchronusRead.
     params[6] = 0xC1 if continuous else 0x80
-    params[13] = 0x80 if dpi == 600 else 0
+    # Windows reverse/sshctlnet/scan_12190.c:177,254-257: the 600-DPI branch
+    # requires capability == 0. iX100 model 1 has capability 1 at 101b2574
+    # (selected-memory-2.txt:1), so this byte remains zero at every DPI.
+    params[13] = 0
     params[15] = 1
     params[31] = 0x30
     tail = 32
     params[tail] = 0
-    params[tail + 1] = 0x10
+    # Android reverse/SSDevCtl.java:7483-7485,7670-7677 defines format/composition.
+    params[tail + 1] = color_mode.data_format
     _put_be16(params, tail + 2, dpi)
     _put_be16(params, tail + 4, dpi)
-    params[tail + 6] = 5
-    # Compression 0/argument 0: real Wi-Fi raw trial on 2026-09-13.
+    params[tail + 6] = color_mode.composition
+    # Compression 0/argument 0: color raw trial on 2026-09-13; gray/mono raw
+    # combinations still require their own device verification.
     params[tail + 7] = 0
     params[tail + 8] = 0
     _put_be32(params, tail + 10, width_1200)
     _put_be32(params, tail + 14, height_1200)
+    # Android reverse/SSDevCtl.java:7523-7528,7536-7538: mono double resolution;
+    # threshold, automatic binary mode and default density stay zero.
+    params[tail + 25] = int(color_mode is ColorMode.MONO)
     return _ScanParameters(bytes(preread), bytes(params))
 
 
-def decode_raw_image(stream: bytes, info: ImageInfo) -> bytes:
-    """Remove the observed APP0/COM insertion, preserving the first two image bytes.
+def decode_raw_image(
+    stream: bytes, info: ImageInfo, color_mode: ColorMode = ColorMode.COLOR
+) -> bytes:
+    """Accept complete pixels or remove the observed APP0/COM insertion.
 
     Evidence: ../../../ix-100-wifi-dev/WIFI_VALIDATION_UNCOMPRESSED_20260913.md.
-    The scanner inserts metadata at byte 2 even with compression disabled.
-    The returned pixels are top-down BGR; no USB-style polarity inversion.
+    The observed color stream inserts metadata at byte 2 with compression off.
+    Pixels retain their device order and polarity; mono rows occupy whole bytes.
     """
+    expected = ((info.width * color_mode.bits_per_pixel + 7) // 8) * info.height
+    if info.width == 0 or info.height == 0:
+        raise DriverError("uncompressed image has zero dimensions")
+    if len(stream) == expected:
+        return stream
     position = 2
     for marker in (b"\xff\xe0", b"\xff\xfe"):
         if len(stream) < position + 4 or stream[position:position + 2] != marker:
@@ -510,12 +563,12 @@ def decode_raw_image(stream: bytes, info: ImageInfo) -> bytes:
         elif content not in (b"PFU ScanSnap #iX100", b"PFU ScanSnap #iX110"):
             raise DriverError("uncompressed stream has an unsupported scanner comment")
         position = end
-    expected = info.width * info.height * 3
     actual = len(stream) - (position - 2)
-    if info.width == 0 or info.height == 0 or actual != expected:
+    if actual != expected:
         raise DriverError(
             f"uncompressed image length mismatch: {actual} bytes, expected {expected} "
-            f"for {info.width}x{info.height} BGR24"
+            f"for {info.width}x{info.height} {color_mode.value} "
+            f"{color_mode.bits_per_pixel}-bit"
         )
     return stream[:2] + stream[position:]
 
@@ -581,6 +634,7 @@ class _Ix100Driver:
                     _build_app_request(0x12, self._identity.mac)
                 )
                 _require_app_success(response, 16, "RELEASE")
+                print("RELEASE succeeded")
             except BaseException as error:
                 errors.append(error)
         self._reserved = False
@@ -598,14 +652,6 @@ class _Ix100Driver:
     def scan(self) -> ScanResult:
         with ScanBatch(self, continuous=False) as batch:
             return batch.scan_page()
-
-    def validate_scan_parameters(self) -> None:
-        if not self._reserved:
-            raise DriverError("scanner is not reserved")
-        if self._batch is not None:
-            raise DriverError("cannot change parameters during an active batch")
-        self._set_scan_parameters()
-        print("scan parameters accepted")
 
     def hardware_status(self) -> HardwareStatus:
         if not self._reserved:
@@ -628,50 +674,6 @@ class _Ix100Driver:
             raw=data,
         )
 
-    def wait_for_panel_trigger(self, timeout_seconds: int = 0) -> None:
-        if not self._reserved or self._trigger_socket is None:
-            raise DriverError("trigger socket is not ready")
-        deadline = (
-            None if timeout_seconds == 0 else time.monotonic() + timeout_seconds
-        )
-        suffix = f" (timeout {timeout_seconds} s)" if timeout_seconds else ""
-        print(f"waiting for scanner-panel trigger{suffix}...")
-        while deadline is None or time.monotonic() < deadline:
-            wait_ms = 1000
-            if deadline is not None:
-                wait_ms = max(0, min(wait_ms, int((deadline - time.monotonic()) * 1000)))
-            if self.poll_panel_trigger(wait_ms):
-                return
-        raise DriverError("timed out waiting for scanner-panel trigger")
-
-    def poll_panel_trigger(self, wait_milliseconds: int) -> bool:
-        if not self._reserved or self._trigger_socket is None:
-            raise DriverError("trigger socket is not ready")
-        try:
-            readable, _, _ = select.select(
-                [self._trigger_socket], [], [], wait_milliseconds / 1000.0
-            )
-        except OSError as error:
-            raise DriverError(f"trigger select failed: {error}") from error
-        if not readable:
-            return False
-        try:
-            packet, _ = self._trigger_socket.recvfrom(256)
-        except OSError as error:
-            raise DriverError(f"trigger recvfrom failed: {error}") from error
-        if len(packet) >= 8 and packet[4:8] in (KEY, b"ssNR"):
-            key_offset = 4
-        elif len(packet) >= 4 and packet[:4] in (KEY, b"ssNR"):
-            key_offset = 0
-        else:
-            return False
-        if key_offset + 8 > len(packet):
-            return False
-        command = _get_be32(packet, key_offset + 4)
-        panel = packet[14] if len(packet) > 14 else 0xFF
-        print(f"trigger command=0x{command:x} panel=0x{panel:x}")
-        return command == 1 and (panel in (0, 0x20) or len(packet) <= 14)
-
     def _exchange_scanner(self, request: bytes | bytearray) -> _ScannerReply:
         return _parse_scanner_reply(self._control.exchange(request))
 
@@ -691,7 +693,19 @@ class _Ix100Driver:
         _require_app_success(response, 0x70, "DEVICE INFORMATION")
 
     def _set_scan_parameters(self, *, continuous: bool = False) -> None:
-        params = _build_scan_parameters(self._config.dpi, continuous=continuous)
+        params = _build_scan_parameters(
+            self._config.dpi,
+            color_mode=self._config.color_mode,
+            overscan=self._config.overscan,
+            continuous=continuous,
+        )
+        print(
+            f"scan settings dpi={self._config.dpi} "
+            f"color_mode={self._config.color_mode.value} "
+            f"overscan={self._config.overscan} "
+            f"width_1200={_get_be32(params.preread, 4)} "
+            f"height_1200={_get_be32(params.preread, 8)}"
+        )
         preread = _build_scanner_request(96, 10, 0, 32, 0xE9, self._identity.mac)
         _put_be32(preread, 0x34, 32)
         preread[64:96] = params.preread
@@ -809,6 +823,10 @@ class _Ix100Driver:
         raise DriverError("READ exceeded the 180-second image time budget")
 
     def _bind_trigger_socket(self) -> None:
+        # Common reservation callback port, also used by direct scanning:
+        # ../../../ix-100-wifi-dev/reverse/sshctlnet/create_device.c:170-188
+        # and reverse/pfussnetif/reserve.c:147-167,249-250 (RESERVE offset 0x30).
+        # No panel-event consumer is attached to this socket.
         try:
             trigger = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             trigger.bind((self._identity.local_ip, 0))
@@ -939,11 +957,18 @@ class ScanBatch:
             stream = driver._read_page()
             self._needs_cancel = False
             info = _parse_image_info(driver._get_image_info())
-            result = ScanResult(image=decode_raw_image(stream, info), info=info)
+            color_mode = driver._config.color_mode
+            result = ScanResult(
+                image=decode_raw_image(stream, info, color_mode),
+                info=info,
+                color_mode=color_mode,
+            )
             self.page_number += 1
             print(
                 f"image info width={info.width} valid_height={info.height} "
-                f"dpi={info.horizontal_dpi}x{info.vertical_dpi} BGR24 bytes={len(result.image)}"
+                f"dpi={info.horizontal_dpi}x{info.vertical_dpi} "
+                f"color_mode={color_mode.value} bits_per_pixel={color_mode.bits_per_pixel} "
+                f"bytes={len(result.image)}"
             )
             return result
         except BaseException as error:
@@ -970,6 +995,7 @@ class ScanBatch:
                 errors.append(f"CANCEL READ: {error}")
         try:
             driver._end_job()
+            print("END JOB succeeded")
         except BaseException as error:
             errors.append(f"END JOB: {error}")
         if errors:
@@ -1044,73 +1070,8 @@ class DriverSession:
     def hardware_status(self) -> HardwareStatus:
         return self._driver.hardware_status()
 
-    def validate_scan_parameters(self) -> None:
-        self._driver.validate_scan_parameters()
-
-    def wait_for_panel_trigger(self, timeout_seconds: int = 0) -> None:
-        self._driver.wait_for_panel_trigger(timeout_seconds)
-
-    def poll_panel_trigger(self, wait_milliseconds: int) -> bool:
-        return self._driver.poll_panel_trigger(wait_milliseconds)
-
-
-def _ascii_field(data: bytes) -> str:
-    return data.split(b"\x00", 1)[0].decode("ascii", errors="replace").rstrip(" ")
-
-
-def discover_devices(config: Config) -> int:
-    identity = route_identity(config.scanner_ip, config.control_port)
-    print(
-        f"route local_ip={identity.local_ip} "
-        f"local_mac={_hex(identity.mac[:6])} broadcast={identity.broadcast_ip}"
-    )
-    request_packets = []
-    for key, version in ((KEY, 0x0010), (b"ssNR", 0x0100)):
-        packet = bytearray(32)
-        packet[0:4] = key
-        packet[8:12] = socket.inet_aton(identity.local_ip)
-        packet[12:20] = identity.mac
-        _put_be32(packet, 20, 0xFF)
-        _put_be16(packet, 24, version)
-        request_packets.append(bytes(packet))
-
-    found = 0
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
-            udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            udp.bind((identity.local_ip, 0))
-            udp.setblocking(False)
-            targets = (
-                (identity.broadcast_ip, config.discovery_port),
-                (config.scanner_ip, config.discovery_port),
-            )
-            for _round in range(3):
-                for packet in request_packets:
-                    for target in targets:
-                        udp.sendto(packet, target)
-                until = time.monotonic() + 0.7
-                while time.monotonic() < until:
-                    timeout = min(0.15, max(0.0, until - time.monotonic()))
-                    readable, _, _ = select.select([udp], [], [], timeout)
-                    if not readable:
-                        continue
-                    data, source = udp.recvfrom(2048)
-                    if len(data) != 144 or data[:4] not in (KEY, b"ssNR"):
-                        continue
-                    embedded_ip = socket.inet_ntoa(data[16:20])
-                    print(
-                        f"found source={source[0]} embedded_ip={embedded_ip} "
-                        f"serial='{_ascii_field(data[48:80])}' "
-                        f"model='{_ascii_field(data[112:136])}'"
-                    )
-                    found += 1
-    except OSError as error:
-        raise DriverError(f"discovery failed: {error}") from error
-    print(f"discovery replies={found}")
-    return 0 if found else 1
-
-
 __all__ = [
+    "ColorMode",
     "Config",
     "DriverError",
     "DriverSession",
@@ -1118,6 +1079,5 @@ __all__ = [
     "HardwareStatus",
     "ScanBatch",
     "ScanResult",
-    "discover_devices",
     "decode_raw_image",
 ]

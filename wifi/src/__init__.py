@@ -1,6 +1,7 @@
 """Python 3 implementation of the standalone ScanSnap iX100 Wi-Fi driver."""
 
 from .driver import (
+    ColorMode,
     Config,
     DriverError,
     DriverSession,
@@ -9,10 +10,10 @@ from .driver import (
     ScanBatch,
     ScanResult,
     decode_raw_image,
-    discover_devices,
 )
 
 __all__ = [
+    "ColorMode",
     "Config",
     "DriverError",
     "DriverSession",
@@ -21,5 +22,4 @@ __all__ = [
     "ScanBatch",
     "ScanResult",
     "decode_raw_image",
-    "discover_devices",
 ]

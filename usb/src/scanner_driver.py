@@ -9,7 +9,6 @@ from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from math import gcd
 import os
 import struct
 import time
@@ -300,33 +299,29 @@ class Scanner:
 
 @dataclass(frozen=True)
 class ScanSettings:
-    """Height in device units; overscan selects the width before alignment."""
+    """Fixed scan windows in 1/1200 inch units, selected by DPI and overscan."""
 
     dpi: int = 300
-    height_units: int = MODEL_WINDOW_HEIGHT_UNITS
     mode: ScanMode = ScanMode.SINGLE
     overscan: bool = True
     color_mode: ColorMode = ColorMode.COLOR
 
     @property
     def width_units(self) -> int:
-        return MODEL_WINDOW_WIDTH_UNITS if self.overscan else 10200
+        return MODEL_WINDOW_WIDTH_UNITS if self.overscan else 10208
 
     @property
     def maximum_width_pixels(self) -> int:
-        # Convert the requested width to whole pixels.
-        pixels = (self.width_units * self.dpi + 1199) // 1200
-        # A whole number of pixels must occupy a multiple of 4 bytes (32 bits).
-        alignment = 32 // gcd(32, self.color_mode.bits_per_pixel)
-        return (pixels + alignment - 1) // alignment * alignment
+        # This is a read bound only; it does not alter the transmitted width.
+        return (self.window_width_units * self.dpi + 1199) // 1200
 
     @property
     def window_width_units(self) -> int:
-        return (self.maximum_width_pixels * 1200 + self.dpi - 1) // self.dpi
+        return self.width_units
 
     @property
     def window_height_units(self) -> int:
-        return self.height_units
+        return 17828 if self.dpi == 600 else MODEL_WINDOW_HEIGHT_UNITS
 
     @property
     def maximum_lines(self) -> int:
@@ -338,7 +333,6 @@ class ScannedPage:
     pixels: bytes
     width: int
     height: int
-    dpi: int
     color_mode: ColorMode = ColorMode.COLOR
 
 
@@ -369,7 +363,7 @@ def make_set_window(
     color_mode: ColorMode = ColorMode.COLOR,
 ) -> tuple[bytes, bytes]:
     # CSWParam_Lynx_Color / CSWParam_Lynx: 8-byte header + 64-byte WDB.
-    # Dimensions are already adjusted by ScanSettings.
+    # Transmit the fixed dimensions selected by ScanSettings without alignment.
     descriptor = bytearray(WINDOW_DESCRIPTOR_SIZE)
     color = color_mode is ColorMode.COLOR
     put_be(descriptor, 0x02, dpi, 2)
@@ -380,7 +374,7 @@ def make_set_window(
         descriptor[0x17] = 0x80  # Selected midpoint threshold; no halftoning.
     descriptor[0x19] = color_mode.composition
     descriptor[0x1A] = 1 if color_mode is ColorMode.MONO else 8
-    descriptor[0x29] = 0x80
+    descriptor[0x29] = 0  # Device gamma selection, without a downloaded LUT.
     if color:
         descriptor[0x28] = 0xC1
         descriptor[0x2A] = 1
@@ -396,14 +390,6 @@ def make_set_window(
     cdb[0] = 0x24
     put_be(cdb, 6, len(payload), 3)
     return bytes(cdb), bytes(payload)
-
-
-def make_gamma_table() -> tuple[bytes, bytes]:
-    """Mercury WRITE83 format with the selected identity LUT."""
-    return (
-        bytes.fromhex("2A 00 83 00 00 00 00 01 0A 00"),
-        bytes.fromhex("00 00 10 00 01 00 01 00 00 00") + bytes(range(256)),
-    )
 
 
 def transform_pixels(data: bytes) -> bytes:
@@ -456,6 +442,7 @@ class ScanBatch:
         # Own cleanup before START, including a partial I/O failure.
         self.job_active = True
         self.scanner.set_job_active(True)
+        self._configure_batch()
         self.initialized = True
         self.report(f"scan mode: {self.settings.mode.value}")
         self.report(
@@ -463,8 +450,8 @@ class ScanBatch:
             f"({self.settings.color_mode.bits_per_pixel} bits/pixel)"
         )
 
-    def _configure_page(self) -> None:
-        # fjtw32 FUN_10062a80: size mode1, window, gamma on every page.
+    def _configure_batch(self) -> None:
+        # Configure once per batch, with device gamma 0 and no LUT download.
         cdb, payload = make_auto_size_detect(overscan=self.settings.overscan)
         self.scanner.checked("AUTO SIZE DETECT", cdb, data_out=payload)
 
@@ -473,9 +460,6 @@ class ScanBatch:
             self.settings.window_height_units, self.settings.color_mode,
         )
         self.scanner.checked("SET WINDOW", cdb, data_out=payload)
-
-        cdb, payload = make_gamma_table()
-        self.scanner.checked("GAMMA TABLE", cdb, data_out=payload)
 
     def paper_loaded(self) -> bool:
         """Read the iX100 paper sensor without starting a page."""
@@ -598,7 +582,6 @@ class ScanBatch:
         self._paper_ready = False
         image = bytearray()
         try:
-            self._configure_page()
             # Arm cleanup before FEED, which may succeed before status I/O fails.
             self.acquisition_active = True
             self._transfer_started = True
@@ -663,7 +646,6 @@ class ScanBatch:
             pixels=transform_pixels(bytes(image)),
             width=dimensions.width,
             height=dimensions.lines,
-            dpi=self.settings.dpi,
             color_mode=self.settings.color_mode,
         )
         if self.settings.mode is ScanMode.SINGLE:

@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import os
 from pathlib import Path
 import sys
 
-from bmp_output import DEFAULT_OUTPUT_DIR, default_output, save_bmp
+from bmp_output import DEFAULT_OUTPUT_DIR, save_bmp
 from cli_common import add_scan_options, report
 from scanner_driver import (
     ColorMode,
-    MODEL_WINDOW_HEIGHT_UNITS,
     ScanMode,
     ScanSettings,
     open_scan_batch,
@@ -52,12 +52,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def interactive_loop(
     output_dir: Path, dpi: int, backend: str, color_mode: ColorMode = ColorMode.COLOR,
-    *, height_units: int = MODEL_WINDOW_HEIGHT_UNITS, overscan: bool = True,
+    *, overscan: bool = True,
 ) -> int:
     if not sys.stdin.isatty():
         raise RuntimeError("continuous scanning requires an interactive terminal")
     settings = ScanSettings(
-        dpi=dpi, height_units=height_units, overscan=overscan,
+        dpi=dpi, overscan=overscan,
         mode=ScanMode.CONTINUOUS, color_mode=color_mode,
     )
     output_dir = output_dir.expanduser().resolve()
@@ -71,7 +71,8 @@ def interactive_loop(
                 if not batch.wait_for_paper(end_requested):
                     break
                 page = batch.scan_page()
-                output = default_output(output_dir, prefix="ix110")
+                stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
+                output = output_dir / f"ix110-{stamp}.bmp"
                 save_bmp(output, page)
                 pages += 1
                 print(
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     return interactive_loop(
         args.output_dir, args.dpi, args.backend, ColorMode(args.color_mode),
-        height_units=args.height_units, overscan=args.overscan,
+        overscan=args.overscan,
     )
 
 

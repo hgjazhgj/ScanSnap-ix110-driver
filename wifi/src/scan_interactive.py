@@ -9,7 +9,13 @@ import os
 import sys
 from pathlib import Path
 
-from app_common import default_config_path, load_config_file, save_scan_image
+from app_common import (
+    add_scan_options,
+    apply_scan_options,
+    default_config_path,
+    load_config_file,
+    save_scan_image,
+)
 from driver import DriverError, DriverSession
 
 
@@ -22,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", default=default_config_path(), metavar="FILE")
     parser.add_argument("--output-dir", metavar="DIR")
+    add_scan_options(parser)
     return parser
 
 
@@ -56,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     if not sys.stdin.isatty():
         raise DriverError("continuous scanning requires an interactive terminal")
     config = load_config_file(arguments.config)
+    apply_scan_options(config, arguments)
     output_directory = (
         Path(arguments.output_dir)
         if arguments.output_dir
