@@ -1,0 +1,12 @@
+# Python caches and virtual environments.
+__pycache__/
+*.py[cod]
+.venv/
+
+# Keep empty output directories, but ignore scanned documents.
+**/output/*
+!**/output/.gitkeep
+
+# Local credentials and device reports.
+**/config/*.local.ini
+**/*.local.*

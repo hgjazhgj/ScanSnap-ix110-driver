@@ -1,0 +1,5 @@
+# ScanSnap iX110 (current model)
+SUBSYSTEM=="usb", ATTR{idVendor}=="05ca", ATTR{idProduct}=="03c8", MODE="0660", TAG+="uaccess"
+
+# ScanSnap iX100 (original model)
+SUBSYSTEM=="usb", ATTR{idVendor}=="04c5", ATTR{idProduct}=="13f4", MODE="0660", TAG+="uaccess"

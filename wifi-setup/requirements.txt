@@ -1,0 +1,4 @@
+# The usbscan backend uses only the Python standard library.
+# These are needed only for the optional libusb backend.
+pyusb==1.3.1
+libusb-package==1.0.30.0; platform_system == "Windows"
