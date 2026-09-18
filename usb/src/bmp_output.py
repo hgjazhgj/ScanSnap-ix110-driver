@@ -12,20 +12,26 @@ DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
 
 
 def save_bmp(path: Path, page: ScannedPage) -> None:
-    bits = page.color_mode.bits_per_pixel
-    source_stride = (page.width * bits + 7) // 8
+    """Write uncompressed color, gray or mono pixels to a top-down BMP."""
+    bits_per_pixel = page.color_mode.bits_per_pixel
+    source_stride = (page.width * bits_per_pixel + 7) // 8
     target_stride = (source_stride + 3) & ~3
     image_size = target_stride * page.height
     # Indexed BMP: 0 is black; the largest index is white. Raw 1-bit
     # rows already put the leftmost pixel in the most significant bit.
-    colors = (1 << bits) if bits <= 8 else 0
+    colors = (1 << bits_per_pixel) if bits_per_pixel <= 8 else 0
     palette = b"".join(
         bytes((value, value, value, 0))
         for value in (index * 255 // (colors - 1) for index in range(colors))
     )
     pixel_offset = 54 + len(palette)
     file_header = struct.pack(
-        "<2sIHHI", b"BM", pixel_offset + image_size, 0, 0, pixel_offset
+        "<2sIHHI",
+        b"BM",
+        pixel_offset + image_size,
+        0,
+        0,
+        pixel_offset,
     )
     info_header = struct.pack(
         "<IiiHHIIiiII",
@@ -33,7 +39,7 @@ def save_bmp(path: Path, page: ScannedPage) -> None:
         page.width,
         -page.height,
         1,
-        bits,
+        bits_per_pixel,
         0,
         image_size,
         0,  # Horizontal pixels per meter is unspecified.

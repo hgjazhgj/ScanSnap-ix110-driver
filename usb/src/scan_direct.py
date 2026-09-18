@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from bmp_output import DEFAULT_OUTPUT_DIR, save_bmp
-from cli_common import add_scan_options, report
+from cli_common import add_scan_options, report, report_saved
 from scanner_driver import (
     ColorMode,
     ScanMode,
@@ -18,13 +18,19 @@ from scanner_driver import (
 
 
 def scan(
-    output: Path, dpi: int, backend: str, color_mode: ColorMode = ColorMode.COLOR,
-    *, overscan: bool = True,
+    output: Path,
+    dpi: int,
+    backend: str,
+    color_mode: ColorMode = ColorMode.COLOR,
+    *,
+    overscan: bool = True,
 ) -> tuple[int, int]:
     """Compatibility wrapper for one-page callers."""
     settings = ScanSettings(
-        dpi=dpi, overscan=overscan,
-        mode=ScanMode.SINGLE, color_mode=color_mode,
+        dpi=dpi,
+        overscan=overscan,
+        mode=ScanMode.SINGLE,
+        color_mode=color_mode,
     )
     with open_scan_batch(backend, settings, reporter=report) as batch:
         page = batch.scan_page()
@@ -35,7 +41,8 @@ def scan(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "output", nargs="?",
+        "output",
+        nargs="?",
         default=str(DEFAULT_OUTPUT_DIR / "ix100-%Y%m%d-%H%M%S-%f.bmp"),
         help="output BMP path template for strftime (uses local time)",
     )
@@ -55,10 +62,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     output = Path(datetime.now().strftime(args.output)).expanduser().resolve()
     width, height = scan(
-        output, args.dpi, args.backend, ColorMode(args.color_mode),
+        output,
+        args.dpi,
+        args.backend,
+        ColorMode(args.color_mode),
         overscan=args.overscan,
     )
-    print(f"saved: {output} ({width} x {height}, {output.stat().st_size} bytes)")
+    report_saved(output, width, height)
     return 0
 
 

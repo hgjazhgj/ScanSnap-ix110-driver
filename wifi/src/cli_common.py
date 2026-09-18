@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import sys
 
+from driver import ColorMode, Config
+
 
 def report(message: str) -> None:
     print(message, flush=True)
@@ -40,30 +42,23 @@ def add_scan_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--dpi",
         type=int,
-        default=300,
-        help=(
-            "scan resolution (default: 300 DPI); window height is 17828 units "
-            "at 600 DPI and 42307 otherwise (1/1200 inch units)"
-        ),
-    )
-    parser.add_argument(
-        "--overscan",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help=(
-            "send width 10368 units when on (default), 10208 when off "
-            "(1/1200 inch units); height is unchanged"
-        ),
+        help="scan resolution (overrides INI)",
     )
     parser.add_argument(
         "--color-mode",
         choices=("color", "gray", "mono"),
-        default="color",
-        help="scan in color, grayscale, or black and white (default: color)",
+        help="scan in color, grayscale, or black and white (overrides INI)",
     )
-    parser.add_argument(
-        "--backend",
-        choices=("auto", "libusb", "usbscan"),
-        default="auto",
-        help="USB backend (default: libusb, with Windows usbscan open fallback)",
-    )
+    overscan = parser.add_mutually_exclusive_group()
+    overscan.add_argument("--overscan", dest="overscan", action="store_true")
+    overscan.add_argument("--no-overscan", dest="overscan", action="store_false")
+    parser.set_defaults(overscan=None)
+
+
+def apply_scan_options(config: Config, arguments: argparse.Namespace) -> None:
+    if arguments.dpi is not None:
+        config.dpi = arguments.dpi
+    if arguments.color_mode is not None:
+        config.color_mode = ColorMode(arguments.color_mode)
+    if arguments.overscan is not None:
+        config.overscan = arguments.overscan

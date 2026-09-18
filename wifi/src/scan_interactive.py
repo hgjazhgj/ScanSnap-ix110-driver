@@ -1,93 +1,75 @@
 #!/usr/bin/env python3
-"""Scan inserted pages automatically in one job; press Enter to finish."""
+"""Start once, scan each inserted page automatically, and press Enter to end."""
 
 from __future__ import annotations
 
 import argparse
-import datetime
-import os
-import sys
+from datetime import datetime
 from pathlib import Path
+import sys
 
-from app_common import (
+from app_common import default_config_path, load_config_file
+from bmp_output import save_bmp
+from cli_common import (
     add_scan_options,
     apply_scan_options,
-    default_config_path,
-    load_config_file,
-    save_scan_image,
+    end_requested,
+    report,
+    report_saved,
 )
-from driver import DriverError, DriverSession
+from driver import Config, DriverError, DriverSession
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Start one continuous job and scan each inserted page automatically. "
-            "Enter finishes after saving the current page; Ctrl-C aborts."
-        )
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=default_config_path(), metavar="FILE")
     parser.add_argument("--output-dir", metavar="DIR")
     add_scan_options(parser)
     return parser
 
 
-def end_requested() -> bool:
-    """Poll on the device-owning thread; Enter typed during a page stays queued."""
-    if os.name == "nt":
-        import msvcrt
-
-        while msvcrt.kbhit():
-            key = msvcrt.getwch()
-            if key in ("\r", "\n", "\x1a"):
-                return True
-            if key in ("\0", "\xe0"):
-                msvcrt.getwch()
-    else:
-        import select
-
-        if select.select([sys.stdin], [], [], 0)[0]:
-            sys.stdin.readline()
-            return True
-    return False
-
-
 def _output_path(directory: Path, sequence: int) -> Path:
-    now = datetime.datetime.now()
-    stamp = now.strftime("%Y%m%d-%H%M%S-") + f"{now.microsecond // 1000:03d}"
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
     return directory / f"ix100-{stamp}-{sequence:04d}.bmp"
 
 
-def main(argv: list[str] | None = None) -> int:
-    arguments = build_parser().parse_args(argv)
-    if not sys.stdin.isatty():
-        raise DriverError("continuous scanning requires an interactive terminal")
-    config = load_config_file(arguments.config)
-    apply_scan_options(config, arguments)
-    output_directory = (
-        Path(arguments.output_dir)
-        if arguments.output_dir
-        else Path(config.output).parent
-    )
-    if str(output_directory) in ("", "."):
-        output_directory = Path("output")
-
+def interactive_loop(output_dir: Path, config: Config) -> int:
     pages = 0
-    with DriverSession(config) as driver:
+    with DriverSession(config, reporter=report) as driver:
         driver.reserve()
         with driver.batch() as batch:
-            print(f"Continuous scanning started. Insert paper to scan automatically. BMP output directory: {output_directory}")
-            print("Press Enter to finish after the current page is read and saved; Ctrl-C to abort.", flush=True)
+            report(
+                "Continuous scanning started. Insert paper to scan automatically. "
+                f"BMP output directory: {output_dir}"
+            )
+            report(
+                "Press Enter to finish after the current page is read and saved; "
+                "Ctrl-C to abort."
+            )
             while True:
-                print("Waiting for paper...", flush=True)
+                report("Waiting for paper...")
                 if not batch.wait_for_paper(end_requested):
                     break
-                result = batch.scan_page()
-                save_scan_image(_output_path(output_directory, pages + 1), result)
+                page = batch.scan_page()
+                output = _output_path(output_dir, pages + 1)
+                save_bmp(output, page)
+                report_saved(output, page.info.width, page.info.height)
                 pages += 1
-            print("Ending the scan batch and releasing device resources...", flush=True)
-    print(f"Session ended. Saved {pages} page(s).")
+            report("Ending the scan batch and releasing device resources...")
+    report(f"Session ended. Saved {pages} page(s).")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if not sys.stdin.isatty():
+        raise DriverError("continuous scanning requires an interactive terminal")
+    config = load_config_file(args.config)
+    apply_scan_options(config, args)
+    output_dir = Path(args.output_dir) if args.output_dir else Path(config.output).parent
+    if str(output_dir) in ("", "."):
+        output_dir = Path("output")
+    return interactive_loop(output_dir, config)
 
 
 if __name__ == "__main__":

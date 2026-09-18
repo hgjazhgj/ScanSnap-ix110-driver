@@ -10,6 +10,7 @@ import sys
 import time
 
 from app_common import default_config_path, load_config_file
+from cli_common import report
 from driver import (
     Config,
     DriverError,
@@ -27,7 +28,7 @@ def _ascii_field(data: bytes) -> str:
 
 def discover_devices(config: Config) -> int:
     identity = route_identity(config.scanner_ip, config.control_port)
-    print(
+    report(
         f"route local_ip={identity.local_ip} "
         f"local_mac={_hex(identity.mac[:6])} broadcast={identity.broadcast_ip}"
     )
@@ -65,7 +66,7 @@ def discover_devices(config: Config) -> int:
                     if len(data) != 144 or data[:4] not in (KEY, b"ssNR"):
                         continue
                     embedded_ip = socket.inet_ntoa(data[16:20])
-                    print(
+                    report(
                         f"found source={source[0]} embedded_ip={embedded_ip} "
                         f"serial='{_ascii_field(data[48:80])}' "
                         f"model='{_ascii_field(data[112:136])}'"
@@ -73,7 +74,7 @@ def discover_devices(config: Config) -> int:
                     found += 1
     except OSError as error:
         raise DriverError(f"discovery failed: {error}") from error
-    print(f"discovery replies={found}")
+    report(f"discovery replies={found}")
     return 0 if found else 1
 
 
@@ -84,8 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    arguments = build_parser().parse_args(argv)
-    return discover_devices(load_config_file(arguments.config))
+    args = build_parser().parse_args(argv)
+    return discover_devices(load_config_file(args.config))
 
 
 if __name__ == "__main__":

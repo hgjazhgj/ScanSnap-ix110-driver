@@ -7,22 +7,22 @@ that both command-line front ends can share the same hardware implementation.
 
 from __future__ import annotations
 
-import datetime as _datetime
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
 import ipaddress
 import socket
 import struct
 import threading
 import time
-from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
 
 
 PROTOCOL_VERSION = 0x0010
 MAX_TCP_FRAME = 2 * 1024 * 1024
 READ_BLOCK_SIZE = 0x40000
 KEY = b"VENS"
+Reporter = Callable[[str], None]
 
 
 class DriverError(RuntimeError):
@@ -36,11 +36,11 @@ class ColorMode(str, Enum):
 
     @property
     def bits_per_pixel(self) -> int:
-        return {ColorMode.COLOR: 24, ColorMode.GRAY: 8, ColorMode.MONO: 1}[self]
+        return {"color": 24, "gray": 8, "mono": 1}[self.value]
 
     @property
     def composition(self) -> int:
-        return {ColorMode.COLOR: 5, ColorMode.GRAY: 2, ColorMode.MONO: 0}[self]
+        return {"color": 5, "gray": 2, "mono": 0}[self.value]
 
     @property
     def data_format(self) -> int:
@@ -243,7 +243,7 @@ class _TcpChannel:
         self._ip = ip
         self._port = port
         self._timeout = timeout
-        self._socket: Optional[socket.socket] = None
+        self._socket: socket.socket | None = None
 
     def _ensure_connected(self) -> socket.socket:
         if self._socket is not None:
@@ -329,7 +329,7 @@ def _password_wire_value(password: str) -> bytearray:
 
 
 def _clock_fields() -> tuple[int, int, int]:
-    now = _datetime.datetime.now().astimezone()
+    now = datetime.now().astimezone()
     date = (now.year << 16) | (now.month << 8) | now.day
     clock = (now.hour << 24) | (now.minute << 16) | (now.second << 8)
     offset = now.utcoffset()
@@ -574,19 +574,25 @@ def decode_raw_image(
 
 
 class _Ix100Driver:
-    def __init__(self, config: Config, identity: NetworkIdentity) -> None:
+    def __init__(
+        self,
+        config: Config,
+        identity: NetworkIdentity,
+        reporter: Reporter | None = None,
+    ) -> None:
         self._config = config
         self._identity = identity
+        self.report = print if reporter is None else reporter
         self._control = _TcpChannel(
             config.scanner_ip, config.control_port, config.timeout_seconds
         )
         self._app = _TcpChannel(
             config.scanner_ip, config.app_port, config.timeout_seconds
         )
-        self._trigger_socket: Optional[socket.socket] = None
+        self._trigger_socket: socket.socket | None = None
         self._trigger_port = 0
         self._keepalive_stop = threading.Event()
-        self._keepalive_thread: Optional[threading.Thread] = None
+        self._keepalive_thread: threading.Thread | None = None
         self._reserved = False
         self._sequence_state = 1
         self._batch: ScanBatch | None = None
@@ -612,10 +618,10 @@ class _Ix100Driver:
             try:
                 self.release()
             except BaseException as cleanup:
-                print(f"RELEASE failed after initialization error: {cleanup}")
+                self.report(f"RELEASE failed after initialization error: {cleanup}")
                 error.add_note(f"RELEASE failed: {cleanup}")
             raise
-        print(f"reserved scanner; trigger UDP port={self._trigger_port}")
+        self.report(f"reserved scanner; trigger UDP port={self._trigger_port}")
 
     def release(self) -> None:
         errors: list[BaseException] = []
@@ -634,7 +640,7 @@ class _Ix100Driver:
                     _build_app_request(0x12, self._identity.mac)
                 )
                 _require_app_success(response, 16, "RELEASE")
-                print("RELEASE succeeded")
+                self.report("RELEASE succeeded")
             except BaseException as error:
                 errors.append(error)
         self._reserved = False
@@ -645,7 +651,7 @@ class _Ix100Driver:
         self._app.close()
         if errors:
             for error in errors[1:]:
-                print(f"session cleanup also failed: {error}")
+                self.report(f"session cleanup also failed: {error}")
                 errors[0].add_note(f"session cleanup also failed: {error}")
             raise errors[0]
 
@@ -686,7 +692,7 @@ class _Ix100Driver:
         _require_scanner_success(reply, "INQUIRY", 0x60)
         vendor = reply.data[8:16].decode("ascii", errors="replace")
         product = reply.data[16:32].decode("ascii", errors="replace")
-        print(f"inquiry vendor='{vendor}' product='{product}'")
+        self.report(f"inquiry vendor='{vendor}' product='{product}'")
 
     def _device_information(self) -> None:
         response = self._app.exchange(_build_app_request(0x13, self._identity.mac))
@@ -699,7 +705,7 @@ class _Ix100Driver:
             overscan=self._config.overscan,
             continuous=continuous,
         )
-        print(
+        self.report(
             f"scan settings dpi={self._config.dpi} "
             f"color_mode={self._config.color_mode.value} "
             f"overscan={self._config.overscan} "
@@ -801,13 +807,13 @@ class _Ix100Driver:
                 else:
                     appended = _append_read_payload(reply, sequence, block, image, maximum)
                 final = " (final)" if reply.scanner_status == 2 else ""
-                print(
+                self.report(
                     f"read block={block} bytes={appended} "
                     f"total={len(image)}{final}"
                 )
                 if reply.scanner_status == 2:
                     sense = self._request_sense()
-                    print(f"page end sense={_hex(sense)}")
+                    self.report(f"page end sense={_hex(sense)}")
                     if ((sense[0] & 0x7F) in (0x70, 0x7F)
                             and (sense[2] & 15) == 0 and sense[12:14] == b"\0\0"
                             and (sense[2] & 0x60) and image):
@@ -885,6 +891,7 @@ class ScanBatch:
 
     def __init__(self, driver: _Ix100Driver, *, continuous: bool) -> None:
         self._driver = driver
+        self.report = driver.report
         self.continuous = continuous
         self.page_number = 0
         self._started = False
@@ -964,7 +971,7 @@ class ScanBatch:
                 color_mode=color_mode,
             )
             self.page_number += 1
-            print(
+            self.report(
                 f"image info width={info.width} valid_height={info.height} "
                 f"dpi={info.horizontal_dpi}x{info.vertical_dpi} "
                 f"color_mode={color_mode.value} bits_per_pixel={color_mode.bits_per_pixel} "
@@ -995,7 +1002,7 @@ class ScanBatch:
                 errors.append(f"CANCEL READ: {error}")
         try:
             driver._end_job()
-            print("END JOB succeeded")
+            self.report("END JOB succeeded")
         except BaseException as error:
             errors.append(f"END JOB: {error}")
         if errors:
@@ -1005,7 +1012,7 @@ class ScanBatch:
         try:
             self.close()
         except BaseException as cleanup:
-            print(f"batch cleanup also failed: {cleanup}")
+            self.report(f"batch cleanup also failed: {cleanup}")
             error.add_note(f"batch cleanup also failed: {cleanup}")
 
     def __enter__(self) -> ScanBatch:
@@ -1025,17 +1032,18 @@ class DriverSession:
     scanner connection.  Use it as a context manager to ensure RELEASE is sent.
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, reporter: Reporter | None = None) -> None:
         self.config = config
+        self.report = print if reporter is None else reporter
         self.identity = route_identity(config.scanner_ip, config.control_port)
-        self._driver = _Ix100Driver(config, self.identity)
-        print(
+        self._driver = _Ix100Driver(config, self.identity, reporter=self.report)
+        self.report(
             f"route local_ip={self.identity.local_ip} "
             f"local_mac={_hex(self.identity.mac[:6])} "
             f"broadcast={self.identity.broadcast_ip}"
         )
 
-    def __enter__(self) -> "DriverSession":
+    def __enter__(self) -> DriverSession:
         return self
 
     def __exit__(self, _type: object, _value: object, _traceback: object) -> None:
@@ -1043,7 +1051,7 @@ class DriverSession:
             self.close()
         except BaseException as error:
             if isinstance(_value, BaseException):
-                print(f"RELEASE failed: {error}")
+                self.report(f"RELEASE failed: {error}")
                 _value.add_note(f"RELEASE failed: {error}")
             else:
                 raise
@@ -1077,6 +1085,7 @@ __all__ = [
     "DriverSession",
     "ImageInfo",
     "HardwareStatus",
+    "Reporter",
     "ScanBatch",
     "ScanResult",
     "decode_raw_image",
